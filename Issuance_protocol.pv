@@ -1,0 +1,123 @@
+(* ===== Types and Functions ===== *)
+type skey.       (* secret signing key *)
+type pkey.       (* public verification key *)
+
+(* ===== Public Identifiers (DID) ===== *)
+free didU: bitstring.   (* User DID *)
+free didB: bitstring.   (* Bank DID *)
+
+(* Derive public key from secret key *)
+fun publickey(skey): pkey.
+
+(* Sign / verify *)
+fun sign(bitstring, skey): bitstring.
+fun checksign(bitstring, pkey): bitstring.
+
+(* Correctness of signatures *)
+equation forall m: bitstring, k: skey;
+  checksign(sign(m, k), publickey(k)) = m.
+
+(* ===== Secret Keys (kept private) ===== *)
+free skU: skey [private].   (* User private key *)
+free skB: skey [private].   (* Bank private key *)
+
+(* ===== Communication Channels ===== *)
+free c_n: channel.        (* /nonce *)
+free c_c: channel.        (* /credential *)
+free c_r: channel.  (* /resolve DID *)
+
+(* ===== Events ===== *)
+event SentCredentialRequest(bitstring, bitstring).   (* (UserDID, nonce) *)
+event IssuedCredential(bitstring, bitstring).        (* (UserDID, nonce) *)
+
+(* ===================================================== *)
+(* DID Registry table                                    *)
+(* ===================================================== *)
+table registry(bitstring, pkey).
+
+
+(* ===================================================== *)
+(* DIDResolver: nhận DID → trả public key tương ứng      *)
+(*  - Tra trong bảng registry                            *)
+(*  - Nếu không có thì kết thúc                          *)
+(* ===================================================== *)
+let DIDResolver =
+  in(c_r, did: bitstring);
+  get registry(did, pk: pkey) in
+    out(c_r, pk)
+  else
+    0.
+
+(* ===================================================== *)
+(* User Process                                          *)
+(* ===================================================== *)
+let User =
+  
+  insert registry(didU, publickey(skU));
+
+  (* Step 1: Request nonce from bank *)
+  out(c_n, didU);
+  in(c_n, (n: bitstring, didRecv: bitstring, sigB: bitstring));
+
+  (* Resolve Bank public key từ DIDResolver *)
+  out(c_r, didB);
+  in(c_r, pkBank: pkey);
+
+  (* Verify bank's signature on (n, didU) *)
+  let mB = checksign(sigB, pkBank) in
+  let (=n, =didU) = mB in
+
+  (* Step 2: User ký (n, didU) bằng khóa bí mật của mình *)
+  let sigU = sign((n, didU), skU) in
+  event SentCredentialRequest(didU, n);
+  out(c_c, (n, didU, sigU));
+
+  (* Step 4: Receive credential code *)
+  in(c_c, credential: bitstring).
+
+(* ===================================================== *)
+(* Bank Process                                          *)
+(* ===================================================== *)
+let Bank =
+  insert registry(didB, publickey(skB));
+
+  (* Step 1: Receive DID and respond with nonce + signature *)
+  in(c_n, didReq: bitstring);
+  new nonce: bitstring;
+  let sigB = sign((nonce, didReq), skB) in
+  out(c_n, (nonce, didReq, sigB));
+
+  (* Step 3: Receive signed credential request from user *)
+  in(c_c, (n2: bitstring, did2: bitstring, sigU: bitstring));
+
+  (* Resolve User public key từ DIDResolver *)
+  out(c_r, did2);
+  in(c_r, pkUer: pkey);
+
+  (* Verify user's signature on (n2, did2) *)
+  let mU = checksign(sigU, pkUer) in
+  let (=n2, =did2) = mU in
+  event IssuedCredential(did2, n2);
+
+  (* Issue credential code *)
+  new credential: bitstring;
+  out(c_c, credential).
+
+(* ===================================================== *)
+(* Security Queries                                      *)
+(* ===================================================== *)
+
+(* Secrecy of private keys *)
+query attacker(skU).
+query attacker(skB).
+
+(* Authentication: nếu bank đã cấp credential thì phải có request hợp lệ từ user *)
+query did: bitstring, n: bitstring;
+  inj-event(IssuedCredential(did, n)) ==>
+  inj-event(SentCredentialRequest(did, n)).
+
+(* ===================================================== *)
+(* Main Process                                          *)
+(* ===================================================== *)
+process
+  (!User) | (!Bank) | (!DIDResolver)
