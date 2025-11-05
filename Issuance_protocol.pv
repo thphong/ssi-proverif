@@ -1,15 +1,10 @@
-(* ===== Types and Functions ===== *)
 type skey.       (* secret signing key *)
 type pkey.       (* public verification key *)
 
-(* ===== Public Identifiers (DID) ===== *)
 free didU: bitstring.   (* User DID *)
 free didB: bitstring.   (* Bank DID *)
 
-(* Derive public key from secret key *)
 fun publickey(skey): pkey.
-
-(* Sign / verify *)
 fun sign(bitstring, skey): bitstring.
 fun checksign(bitstring, pkey): bitstring.
 
@@ -24,17 +19,23 @@ free skB: skey [private].   (* Bank private key *)
 (* ===== Communication Channels ===== *)
 free c_n: channel.        (* /nonce *)
 free c_c: channel.        (* /credential *)
-free c_r: channel.  (* /resolve DID *)
+free c_r: channel.  (* [private] /resolve DID *)
 
 (* ===== Events ===== *)
 event SentCredentialRequest(bitstring, bitstring).   (* (UserDID, nonce) *)
 event IssuedCredential(bitstring, bitstring).        (* (UserDID, nonce) *)
+event ResolvedDID(bitstring, pkey).                 (* (did, pk returned) *)
 
-(* ===================================================== *)
-(* DID Registry table                                    *)
-(* ===================================================== *)
+(* ===== Tables ===== *)
 table registry(bitstring, pkey).
+table usedNonce(bitstring, bitstring).
 
+(* Registrar: only trusted process that populates registry *)
+let Registrar =
+  (* only run once: insert the true mappings *)
+  insert registry(didU, publickey(skU));
+  insert registry(didB, publickey(skB));
+  0.
 
 (* ===================================================== *)
 (* DIDResolver: nhận DID → trả public key tương ứng      *)
@@ -44,6 +45,7 @@ table registry(bitstring, pkey).
 let DIDResolver =
   in(c_r, did: bitstring);
   get registry(did, pk: pkey) in
+    event ResolvedDID(did, pk);
     out(c_r, pk)
   else
     0.
@@ -52,8 +54,6 @@ let DIDResolver =
 (* User Process                                          *)
 (* ===================================================== *)
 let User =
-  
-  insert registry(didU, publickey(skU));
 
   (* Step 1: Request nonce from bank *)
   out(c_n, didU);
@@ -79,7 +79,6 @@ let User =
 (* Bank Process                                          *)
 (* ===================================================== *)
 let Bank =
-  insert registry(didB, publickey(skB));
 
   (* Step 1: Receive DID and respond with nonce + signature *)
   in(c_n, didReq: bitstring);
@@ -90,34 +89,46 @@ let Bank =
   (* Step 3: Receive signed credential request from user *)
   in(c_c, (n2: bitstring, did2: bitstring, sigU: bitstring));
 
-  (* Resolve User public key từ DIDResolver *)
-  out(c_r, did2);
-  in(c_r, pkUer: pkey);
+  (* So sánh trước xem DID và nonce có khớp với yêu cầu ban đầu không *)
+  if n2 = nonce && did2 = didReq then
+    (* Resolve User public key từ DIDResolver *)
+    out(c_r, did2);
+    in(c_r, pkUer: pkey);
 
-  (* Verify user's signature on (n2, did2) *)
-  let mU = checksign(sigU, pkUer) in
-  let (=n2, =did2) = mU in
-  event IssuedCredential(did2, n2);
+    (* Verify user's signature *)
+    let mU = checksign(sigU, pkUer) in
+    let (=nonce, =didReq) = mU in
 
-  (* Issue credential code *)
-  new credential: bitstring;
-  out(c_c, credential).
+    (* Kiểm tra chống replay *)
+    get usedNonce(did2, n2) in
+      0
+    else
+      insert usedNonce(did2, n2);
+      event IssuedCredential(did2, n2);
+      new credential: bitstring;
+      out(c_c, credential)
+  else
+    0.
 
 (* ===================================================== *)
 (* Security Queries                                      *)
 (* ===================================================== *)
-
-(* Secrecy of private keys *)
 query attacker(skU).
 query attacker(skB).
 
 (* Authentication: nếu bank đã cấp credential thì phải có request hợp lệ từ user *)
-query did: bitstring, n: bitstring;
-  inj-event(IssuedCredential(did, n)) ==>
-  inj-event(SentCredentialRequest(did, n)).
+query n: bitstring;
+  inj-event(IssuedCredential(didU, n)) ==>
+  inj-event(SentCredentialRequest(didU, n)).
+
+(* ensure resolver returned genuine key when issuing to didU 
+query n: bitstring;
+  inj-event(IssuedCredential(didU, n)) ==>
+  inj-event(ResolvedDID(didU, publickey(skU))).*)
 
 (* ===================================================== *)
 (* Main Process                                          *)
 (* ===================================================== *)
+noselect k: skey, n: bitstring; attacker(sign((n, didU), k)).
 process
-  (!User) | (!Bank) | (!DIDResolver)
+   Registrar | (!User) | (!Bank) | (!DIDResolver)
