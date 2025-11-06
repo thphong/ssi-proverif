@@ -44,8 +44,8 @@ free c_auth: channel.
 free c_resolve: channel.  (* [private] /resolve DID *)
 
 (* Sự kiện đánh dấu các bước quan trọng để kiểm chứng *)
-event userStart(bitstring).    (* User bắt đầu xác thực với DID *)
-event tokenIssued(bitstring).  (* Bank phát hành token cho DID *)
+event userStart(bitstring, bitstring).    (* User bắt đầu xác thực với DID *)
+event tokenIssued(bitstring, bitstring).  (* Bank phát hành token cho DID *)
 
 let DIDResolver =
   in(c_resolve, did: bitstring);
@@ -79,7 +79,7 @@ let UserProcess =
     let prest = make_presentation(didU, rNonce, cred, sigVP) in
     out(c_auth, prest);
     (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
-    event userStart(didU);
+    event userStart(didU, rNonce);
     (* Bước 4: Nhận accessToken từ Bank *)
     in(c_auth, token: bitstring).
 
@@ -110,8 +110,11 @@ let BankProcess =
     new token: bitstring;
     out(c_auth, token);
     (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-    event tokenIssued(uDid).
+    event tokenIssued(uDid, nonce).
 
-query event(tokenIssued(didU)).
+query n: bitstring; event(tokenIssued(didU, n)).
+query n: bitstring;
+  inj-event(tokenIssued(didU, n)) ==>
+  inj-event(userStart(didU, n)).
 
 process !UserProcess | !BankProcess
