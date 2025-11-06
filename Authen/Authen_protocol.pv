@@ -1,0 +1,117 @@
+type skey.
+type pkey.
+type signature.
+
+(* Hàm về mã hóa*)
+fun pk(skey): pkey.
+fun sign(bitstring, skey): signature.
+reduc forall m: bitstring, k: skey; verifysign(sign(m, k), pk(k)) = m.
+fun aenc(bitstring, pkey ) : bitstring.
+reduc forall m: bitstring , k : skey ; adec(aenc(m, pk(k)), k) = m.
+
+(* Hàm về credential, đang thiếu kiểm tra pk(k) chính là public key của issuer *)
+type credential.
+fun make_credential(bitstring, bitstring, bitstring, signature): credential.
+reduc
+  forall issuer: bitstring, subject: bitstring, data: bitstring, k: skey;
+    get_issuer_credential(make_credential(issuer, subject, data, sign((issuer, subject, data), k)), pk(k)) = issuer.
+reduc
+  forall issuer: bitstring, subject: bitstring, data: bitstring, k: skey;
+    get_subject_credential(make_credential(issuer, subject, data, sign((issuer, subject, data), k)), pk(k)) = subject.
+
+(* Hàm về presentation, đang thiếu kiểm tra pk(k) chính là public key của subject, và subject phải bằng subject trong vc, và issuer trong vc phải là bank *)
+type presentation.
+fun make_presentation(bitstring, bitstring, credential, signature): presentation.
+reduc
+  forall subject: bitstring, nonce: bitstring, vc: credential, k: skey;
+    get_subject_presentation(make_presentation(subject, nonce, vc, sign((subject, nonce, vc), k)), pk(k)) = subject.
+reduc
+  forall subject: bitstring, nonce: bitstring, vc: credential, k: skey;
+    get_nonce_presentation(make_presentation(subject, nonce, vc, sign((subject, nonce, vc), k)), pk(k)) = nonce.
+reduc
+  forall subject: bitstring, nonce: bitstring, vc: credential, k: skey;
+    get_vc_presentation(make_presentation(subject, nonce, vc, sign((subject, nonce, vc), k)), pk(k)) = vc.
+
+
+free didU: bitstring.
+free didB: bitstring.
+free skU: skey [private].
+free skB: skey [private].
+free data: bitstring [private].    (* Dữ liệu trong VC (ví dụ thông tin người dùng) *)
+
+(* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
+free c_auth: channel.
+free c_resolve: channel.  (* [private] /resolve DID *)
+
+(* Sự kiện đánh dấu các bước quan trọng để kiểm chứng *)
+event userStart(bitstring).    (* User bắt đầu xác thực với DID *)
+event tokenIssued(bitstring).  (* Bank phát hành token cho DID *)
+
+let DIDResolver =
+  in(c_resolve, did: bitstring);
+  if did = didU then
+    out(c_resolve, pk(skU))
+  else if did = didB then
+    out(c_resolve, pk(skB))
+  else
+    0.
+
+(* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
+let UserProcess = 
+    (* Ví dụ Verifiable Credential do Bank cấp cho User trước đó *)
+    let vc_data = (didB, didU, data) in
+    let sigVC = sign(vc_data, skB) in
+    let cred = make_credential(didB, didU, data, sigVC) in
+    (* Bước 1: Gửi yêu cầu đăng nhập *)
+    out(c_auth, didU);
+    (* Bước 2: Nhận nonce và chữ ký từ Bank *)
+    in(c_auth, (rNonce: bitstring, rDid: bitstring, rSigB: signature));    
+    out(c_resolve, didB);
+    in(c_resolve, pkB: pkey);
+    (* Kiểm tra chữ ký của Bank trên (nonce, rDid) *)
+    let mB = verifysign(rSigB, pkB) in
+    let (=rNonce, =rDid) =  mB in
+    (* Kiểm tra chữ ký của Bank trên (nonce, didU) *)
+    let (=didU) = rDid in
+    (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
+    let vp_data = (didU, rNonce, cred) in
+    let sigVP = sign(vp_data, skU) in
+    let prest = make_presentation(didU, rNonce, cred, sigVP) in
+    out(c_auth, prest);
+    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
+    event userStart(didU);
+    (* Bước 4: Nhận accessToken từ Bank *)
+    in(c_auth, token: bitstring).
+
+(* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
+let BankProcess =
+    in(c_auth, uDid: bitstring);
+    (* Bước 1 (Bank nhận yêu cầu): uDid là DID từ User *)
+    new nonce: bitstring;
+    (* Bước 2: Gửi nonce cùng chữ ký của Bank trên (nonce, uDid) *)
+    let sigResp = sign((nonce, uDid), skB) in
+    out(c_auth, (nonce, uDid, sigResp));
+    (* Bước 3: Nhận VP từ User *)
+    in(c_auth, prest_Res: presentation);
+    
+    (* Resolve Bank public key từ DIDResolver *)
+    out(c_resolve, didU);
+    in(c_resolve, pkU: pkey);
+    (* Kiểm tra 3 điều kiện an ninh trên VP *)
+    let subject_res = get_subject_presentation(prest_Res, pkU) in
+    let nonce_res = get_nonce_presentation(prest_Res, pkU) in
+    let (=uDid, =nonce) = (subject_res, nonce_res) in
+    let vc_res = get_vc_presentation(prest_Res, pkU) in
+    let pkB = pk(skB) in
+    let issuer_vc = get_issuer_credential(vc_res, pkB) in
+    let subject_vc = get_subject_credential(vc_res, pkB) in
+    let (=didB, =uDid) = (issuer_vc, subject_vc) in
+    (* Bước 4: Tạo accessToken mới và gửi cho User *)
+    new token: bitstring;
+    out(c_auth, token);
+    (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
+    event tokenIssued(uDid).
+
+query event(tokenIssued(didU)).
+
+process !UserProcess | !BankProcess
