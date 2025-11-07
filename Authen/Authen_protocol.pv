@@ -125,7 +125,12 @@ process !UserProcess | !BankProcess | !DIDResolver
 
 (*
 Cải tiến:
-- Có thể public VC được không
 - Trường hợp khóa authen khác khóa VC (hiện tại = nhau)
-- Trường hợp đã cải tiến: pkU gửi trực tiếp trong AuthenReq
+ *)
+
+ (*
+ Đã thử nghiệm
+ - Lộ VC: tạch
+ - Lộ VP: tạch
+ - Không gửi PkU khi rquest login, tạch
  *)
