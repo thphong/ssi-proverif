@@ -85,7 +85,7 @@ let UserProcess =
     let prest = make_presentation(didU, (nonceU,nonceB), cred, sigVP) in
     out(c_auth, aenc(to_string(prest), pkB));
     (* Bước 4: Nhận accessToken từ Bank *)
-    in(c_auth, token: bitstring).
+    in(c_auth, token_enc: bitstring).
 
 (* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
 let BankProcess =
@@ -107,7 +107,7 @@ let BankProcess =
     let (=uDid) = get_subject_credential(vc_res, pkB) in
     (* Tạo accessToken mới và gửi cho User *)
     new token: bitstring;
-    out(c_auth, token);
+    out(c_auth, aenc(token, pkU));
     (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
     event tokenIssued(uDid, nonceU, nonceB).
 
@@ -115,12 +115,13 @@ query did:bitstring, n1: bitstring, n2: bitstring;
   inj-event(tokenIssued(did, n1, n2)) ==>
   inj-event(userStart(did, n1, n2)).
 
+query attacker(skU).
+query attacker(skB).
 query n1: bitstring, n2: bitstring; event(tokenIssued(didU, n1, n2)).
 
 (*query n: bitstring; event(userStart(didU, n)).
 query n: bitstring; event(tokenIssued(didU, n)).
-query attacker(skU).
-query attacker(skB).*)
+*)
 
 process !UserProcess | !BankProcess | !DIDResolver
 
