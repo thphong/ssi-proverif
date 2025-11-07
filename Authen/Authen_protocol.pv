@@ -46,8 +46,8 @@ free c_auth: channel.
 free c_resolve: channel.  (* [private] /resolve DID *)
 
 (* Sự kiện đánh dấu các bước quan trọng để kiểm chứng *)
-event userStart(bitstring, bitstring, bitstring).    (* User bắt đầu xác thực với DID *)
-event tokenIssued(bitstring, bitstring, bitstring).  (* Bank phát hành token cho DID *)
+event userStart(bitstring, bitstring).    (* User bắt đầu xác thực với DID *)
+event tokenIssued(bitstring, bitstring).  (* Bank phát hành token cho DID *)
 
 let DIDResolver =
   in(c_resolve, did: bitstring);
@@ -60,8 +60,6 @@ let DIDResolver =
 
 (* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
 let UserProcess = 
-
-    new nonceU: bitstring;
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
     (* Ví dụ Verifiable Credential do Bank cấp cho User trước đó *)
@@ -72,17 +70,17 @@ let UserProcess =
     let (=didB) = get_issuer_credential(cred, pkB) in
     let pkU = pk(skU) in
     (* Gửi yêu cầu đăng nhập *)
-    out(c_auth, aenc((didU, pkU, nonceU), pkB));
+    out(c_auth, aenc((didU, pkU), pkB));
     (* Nhận nonce được mã hóa từ Bank *)
     in(c_auth, ResB: bitstring);
     (* Kiểm tra phản hồi từ Bank trên nonceU *)
-    let (=didU, =nonceU, nonceB: bitstring) = adec(ResB, skU) in    
+    let (=didU, nonceB: bitstring) = adec(ResB, skU) in    
     (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
-    event userStart(didU, nonceU, nonceB);
+    event userStart(didU, nonceB);
     (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
-    let vp_data = (didU, (nonceU,nonceB), cred) in
+    let vp_data = (didU,nonceB, cred) in
     let sigVP = sign(vp_data, skU) in
-    let prest = make_presentation(didU, (nonceU,nonceB), cred, sigVP) in
+    let prest = make_presentation(didU, nonceB, cred, sigVP) in
     out(c_auth, aenc(to_string(prest), pkB));
     (* Bước 4: Nhận accessToken từ Bank *)
     in(c_auth, token_enc: bitstring).
@@ -90,17 +88,17 @@ let UserProcess =
 (* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
 let BankProcess =
     in(c_auth, authenReq: bitstring);
-    let (uDid:bitstring, pkU: pkey, nonceU:bitstring) = adec(authenReq, skB) in
+    let (uDid:bitstring, pkU: pkey) = adec(authenReq, skB) in
     (* Bank nhận yêu cầu: uDid là DID từ User *)
     new nonceB: bitstring;
     (* Gửi nonce đã mã hóa *)
-    out(c_auth, aenc((uDid, nonceU, nonceB), pkU));
+    out(c_auth, aenc((uDid, nonceB), pkU));
     (* Nhận VP từ User *)
     in(c_auth, prest_Res_enc: bitstring);
     (* Kiểm tra điều kiện an ninh trên VP *)
     let prest_Res = to_presentation(adec(prest_Res_enc, skB)) in
     let (=uDid) = get_subject_presentation(prest_Res, pkU) in
-    let (=nonceU, =nonceB) = get_nonce_presentation(prest_Res, pkU) in
+    let (=nonceB) = get_nonce_presentation(prest_Res, pkU) in
     let vc_res = get_vc_presentation(prest_Res, pkU) in
     let pkB = pk(skB) in
     let (=didB) = get_issuer_credential(vc_res, pkB) in
@@ -109,15 +107,15 @@ let BankProcess =
     new token: bitstring;
     out(c_auth, aenc(token, pkU));
     (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-    event tokenIssued(uDid, nonceU, nonceB).
+    event tokenIssued(uDid, nonceB).
 
-query did:bitstring, n1: bitstring, n2: bitstring;
-  inj-event(tokenIssued(did, n1, n2)) ==>
-  inj-event(userStart(did, n1, n2)).
+query did:bitstring, n1: bitstring;
+  inj-event(tokenIssued(did, n1)) ==>
+  inj-event(userStart(did, n1)).
 
 query attacker(skU).
 query attacker(skB).
-query n1: bitstring, n2: bitstring; event(tokenIssued(didU, n1, n2)).
+query n1: bitstring; event(tokenIssued(didU, n1)).
 
 (*query n: bitstring; event(userStart(didU, n)).
 query n: bitstring; event(tokenIssued(didU, n)).
