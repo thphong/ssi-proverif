@@ -56,13 +56,9 @@ let DIDResolver =
     0.
 
 (* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
-let UserProcess = 
+let UserProcess (cred: credential) = 
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
-    (* Ví dụ Verifiable Credential do Bank cấp cho User trước đó *)
-    let vc_data = (didB, didU, dataU, null_cred) in
-    let sigVC = sign(vc_data, skB) in
-    let cred = make_credential(didB, didU, dataU, null_cred, sigVC) in
     (* Kiểm tra public key của bank *)
     let (=didB, _:bitstring, _:bitstring, _:credential) = resolve_credential(cred, pkB) in
     let pkU = pk(skU) in
@@ -83,20 +79,13 @@ let UserProcess =
     in(c_auth, token_enc: bitstring).
 
 (* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
-let TPPProcess = 
+let TPPProcess (delegate_cred: credential) = 
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
     out(c_resolve, didU);
-    in(c_resolve, pkU: pkey);
-    (* Ví dụ Verifiable Credential do Bank cấp cho User trước đó *)
-    let parent_vc_data = (didB, didU, dataU, null_cred) in
-    let parent_sigVC = sign(parent_vc_data, skB) in
-    let parent_cred = make_credential(didB, didU, dataU, null_cred, parent_sigVC) in
-    let vc_data = (didU, didTPP, dataTPP, parent_cred) in
-    let sigVC = sign(vc_data, skU) in
-    let cred = make_credential(didU, didTPP, dataTPP, parent_cred, sigVC) in
+    in(c_resolve, pkU: pkey);    
     (* Kiểm tra public key của bank *)
-    let (=didU,_:bitstring, _:bitstring, vc_user: credential) = resolve_credential(cred, pkU) in
+    let (=didU,_:bitstring, _:bitstring, vc_user: credential) = resolve_credential(delegate_cred, pkU) in
     let (=didB, _:bitstring, _:bitstring, _: credential) = resolve_credential(vc_user, pkB) in
     let pkTPP = pk(skTPP) in
     (* Gửi yêu cầu đăng nhập *)
@@ -108,9 +97,9 @@ let TPPProcess =
     (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
     event userStart(didTPP, didU, nonceB);
     (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
-    let vp_data = (didU, didTPP, nonceB, cred) in
+    let vp_data = (didU, didTPP, nonceB, delegate_cred) in
     let sigVP = sign(vp_data, skTPP) in
-    let prest = make_presentation(didU, didTPP, nonceB, cred, sigVP) in
+    let prest = make_presentation(didU, didTPP, nonceB, delegate_cred, sigVP) in
     out(c_auth, aenc(to_string(prest), pkB));
     (* Bước 4: Nhận accessToken từ Bank *)
     in(c_auth, token_enc: bitstring).
@@ -158,9 +147,22 @@ query did1:bitstring, did2:bitstring, n1: bitstring;
   inj-event(tokenIssued(did1, did2, n1)) ==>
   inj-event(userStart(did1, did2, n1)).
   
-(*query n: bitstring; event(tokenIssued(didU, didTPP, n)).*)
+query n: bitstring; event(tokenIssued(didU, didU, n)).
+query n: bitstring; event(tokenIssued(didTPP, didU, n)).
+query n: bitstring; event(tokenIssued(didU, didTPP, n)).
+query n: bitstring; event(tokenIssued(didTPP, didTPP, n)).
 
-process !UserProcess | !TPPProcess | !BankProcess | !DIDResolver
+process 
+    let vc_data = (didB, didU, dataU, null_cred) in
+    let sigVC = sign(vc_data, skB) in
+    let cred = make_credential(didB, didU, dataU, null_cred, sigVC) in
+    let delegate_vc_data = (didU, didTPP, dataTPP, cred) in
+    let delegate_sigVC = sign(delegate_vc_data, skU) in
+    let delegate_cred = make_credential(didU, didTPP, dataTPP, cred, delegate_sigVC) in
+    (
+      !UserProcess(cred) | !TPPProcess(delegate_cred) | !BankProcess | !DIDResolver
+    )
+
 
 (*
 Cải tiến:
