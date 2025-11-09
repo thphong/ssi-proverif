@@ -35,6 +35,8 @@ free skB: skey [private].
 free skTPP: skey [private].
 free dataU: bitstring [private].    (* Dữ liệu trong VC (ví dụ thông tin người dùng) *)
 free dataTPP: bitstring [private].    (* Dữ liệu trong VC của TPP *)
+free tokenU: bitstring [private]. 
+free tokenTPP: bitstring [private]. 
 
 (* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
 free c_auth: channel.
@@ -125,32 +127,34 @@ let BankProcess =
     if didReq = didOri then (
       let (=didB, =pkB) = (issuer_did_vc, pkIssuer) in
       (* Tạo accessToken mới và gửi cho User *)
-      new token: bitstring;
-      out(c_auth, aenc(token, pkReq));
+      (*new token: bitstring;*)
+      out(c_auth, aenc(tokenU, pkReq));
       (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
       event tokenIssued(didReq, didReq, nonceB)
     )
     else (
       let(=didOri, =didOri) = (issuer_did, issuer_did_vc) in
       let (=didB, =didOri, _:bitstring, _: credential) = resolve_credential(parent_vc, pkB) in
-      new token: bitstring;
-      out(c_auth, aenc(token, pkReq));
+      (*new token: bitstring;*)
+      out(c_auth, aenc(tokenTPP, pkReq));
       (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
       event tokenIssued(didReq, didOri, nonceB)
     ).
 
-(*query attacker(skU).
-query attacker(skB).
-query n1: bitstring; event(tokenIssued(didU, n1)).*)
-
-query did1:bitstring, did2:bitstring, n1: bitstring;
-  inj-event(tokenIssued(did1, did2, n1)) ==>
-  inj-event(userStart(did1, did2, n1)).
+query didFReq:bitstring, didOri:bitstring, n: bitstring;
+  inj-event(tokenIssued(didFReq, didOri, n)) ==>
+  inj-event(userStart(didFReq, didOri, n)).
   
 query n: bitstring; event(tokenIssued(didU, didU, n)).
 query n: bitstring; event(tokenIssued(didTPP, didU, n)).
 query n: bitstring; event(tokenIssued(didU, didTPP, n)).
 query n: bitstring; event(tokenIssued(didTPP, didTPP, n)).
+
+query attacker(skU).
+query attacker(skB).
+query attacker(skTPP).
+query attacker(tokenU).
+query attacker(tokenTPP).
 
 process 
     let vc_data = (didB, didU, dataU, null_cred) in
@@ -163,15 +167,13 @@ process
       !UserProcess(cred) | !TPPProcess(delegate_cred) | !BankProcess | !DIDResolver
     )
 
-
-(*
-Cải tiến:
-- Trường hợp khóa authen khác khóa VC (hiện tại = nhau)
- *)
-
  (*
  Đã thử nghiệm
- - Lộ VC: tạch
- - Lộ VP: tạch
- - Không gửi PkU khi rquest login, tạch
+ - Lộ VC: bị tấn công
+ - Lộ VP: bị tấn công
+ - Không gửi PkU khi rquest login:  bị tấn công
+ - Bị thay đổi public key của User trong registry: TPP không thể đăng nhập và access tài khoản của User
+ - Bị thay đổi public key của Bank trong registry:  Cả User và TPP không thể đăng nhập và access tài khoản của User
+ - Lợi ích: dù cho attacker giả mạo trang web giả, cũng ko tấn công được, vì đã có bước kiểm tra pkB trong chữ kí của VC
+ - Nhược điểm: chưa chứng minh được khóa vòng, revoke, zkp
  *)
