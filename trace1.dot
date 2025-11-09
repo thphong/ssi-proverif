@@ -304,29 +304,26 @@ P0_0_0__33 -> P0_0_0__34 [label = <>, weight = 100, style = invisible]
 P__41 -> P__42 [label = <>, weight = 100]
 {rank = same; P__42 P0_0_0__34 P0_0_1__30 P0_1_0__30}
 P0_1_0__30 -> P0_1_0__31 [label = <>, weight = 100]
-P0_1_0__31 [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="darkgreen">{52}</FONT><FONT COLOR="blue">new </FONT>token_2</TD></TR></TABLE>>]
-P0_1_0__31 -> P0_1_0__32 [label = <>, weight = 100]
-P0_1_0__32 -> P0_1_0__33 [label = <>, weight = 100]
 P0_0_1__31 [label = "", style = invisible]
 P0_0_1__30 -> P0_0_1__31 [label = <>, weight = 100, style = invisible]
 P0_0_0__35 [label = "", style = invisible]
 P0_0_0__34 -> P0_0_0__35 [label = <>, weight = 100, style = invisible]
 P__42 -> P__43 [label = <>, weight = 100]
-{rank = same; P__43 P0_0_0__35 P0_0_1__31 P0_1_0__33}
-P0_1_0__33 -> P0_1_0__34 [label = <>, weight = 100]
+{rank = same; P__43 P0_0_0__35 P0_0_1__31 P0_1_0__31}
+P0_1_0__31 -> P0_1_0__32 [label = <>, weight = 100]
 P__43 -> P__44 [label = <>, weight = 100]
-{rank = same; P__44 P0_1_0__34}
-P0_1_0__34 -> P__44 [label = <~M_7 = aenc(token_2,pk(skU))>, arrowhead = normal]
-P0_1_0__34 -> P0_1_0__35 [label = <>, weight = 100]
+{rank = same; P__44 P0_1_0__32}
+P0_1_0__32 -> P__44 [label = <~M_7 = aenc(tokenU,pk(skU))>, arrowhead = normal]
+P0_1_0__32 -> P0_1_0__33 [label = <>, weight = 100]
 P0_0_1__32 [label = "", style = invisible]
 P0_0_1__31 -> P0_0_1__32 [label = <>, weight = 100, style = invisible]
 P0_0_0__36 [label = "", style = invisible]
 P0_0_0__35 -> P0_0_0__36 [label = <>, weight = 100, style = invisible]
 P__44 -> P__45 [label = <>, weight = 100]
-{rank = same; P__45 P0_0_0__36 P0_0_1__32 P0_1_0__35}
-P0_1_0__35 -> P0_1_0__36 [label = <>, weight = 100]
-P0_1_0__36 [color = red, shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="darkgreen">{54}</FONT><FONT COLOR="blue">event</FONT> tokenIssued(didU,didU,nonceB_4)</TD></TR></TABLE>>]
-P0_1_0__36 -> P0_1_0__37 [label = <>, weight = 100]
+{rank = same; P__45 P0_0_0__36 P0_0_1__32 P0_1_0__33}
+P0_1_0__33 -> P0_1_0__34 [label = <>, weight = 100]
+P0_1_0__34 [color = red, shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="darkgreen">{53}</FONT><FONT COLOR="blue">event</FONT> tokenIssued(didU,didU,nonceB_4)</TD></TR></TABLE>>]
+P0_1_0__34 -> P0_1_0__35 [label = <>, weight = 100]
 Abbrev [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR> <TD> Abbreviations </TD></TR><TR><TD>~M_5 = aenc(make_presentation(didB,didU,nonceB_4,<br/>
 make_credential(didB,didU,dataU,null_cred,sign(<br/>
 (didB,didU,dataU,null_cred),skB)),sign((didB,didU,<br/>

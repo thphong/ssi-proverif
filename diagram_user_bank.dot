@@ -1,0 +1,151 @@
+digraph {
+graph [ordering = out, rankdir=TB]
+edge [arrowhead = none, penwidth = 1.6, fontsize = 30]
+node [shape = point, width = 0, height = 0, fontsize = 30]
+Trace [label = <Process to authenticate/authorize User<br/>
+>, shape = plaintext]
+P_Honest_Process [label = "Honest Process", shape = plaintext]
+Trace -> P_Honest_Process [label = "", style = invisible, weight = 100]
+P_Honest_Process -> P_L0_Root [label = <>, weight = 100]
+/*RPar */
+P_L0_Root -> P_L1_User [label = <>]
+P_L0_Root -> P_L1_Bank [label = <>]
+P_L0_Root -> P_L1_Resolver [label = <>]
+P_L0_Root [label = "", fixedsize = false, width = 0, height = 0, shape = none]
+P_L1_User [label = "!", shape = ellipse]
+P_L1_Bank [label = "!", shape = ellipse]
+P_L1_Resolver [label = "!", shape = ellipse]
+{rank = same; P_L1_User P_L1_Bank P_L1_Resolver }
+
+/*Level 2 */
+
+P_L1_User -> P_L2_User [label = <>, weight = 100]
+P_L1_Bank -> P_L2_Bank [label = <>, weight = 100]
+P_L1_Resolver -> P_L2_Resolver [label = <>, weight = 100]
+{rank = same; P_L2_User P_L2_Bank P_L2_Resolver }
+
+P_L2_User [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD> <FONT COLOR="darkgreen">UserProcess</FONT>(verifiable credential VC)</TD></TR></TABLE>>]
+P_L2_Bank [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="darkgreen">BankProcess</FONT></TD></TR></TABLE>>]
+P_L2_Resolver [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="darkgreen">DIDResolver</FONT></TD></TR></TABLE>>]
+
+P_L2_User -> P_L2t_User [label = <>, weight = 100]
+P_L2_Bank -> P_L2t_Bank [label = <>, weight = 100]
+P_L2_Resolver -> P_L2t_Resolver [label = <>, weight = 100]
+{rank = same; P_L2t_User P_L2t_Bank P_L2t_Resolver }
+
+
+/*Level 3 */
+
+P_L2t_User -> P_L3_User [label = <>, weight = 100]
+P_L2t_Resolver -> P_L3_Resolver [label = <>, weight = 100]
+{rank = same; P_L3_User P_L3_Resolver }
+P_L3_User -> P_L3_Resolver [label = <didB>, arrowhead = normal]
+
+P_L3_User -> P_L3t_User [label = <>, weight = 100]
+P_L2t_Bank -> P_L3t_Bank [label = <>, weight = 100]
+P_L3_Resolver -> P_L3t_Resolver [label = <>, weight = 100]
+{rank = same; P_L3t_User P_L3t_Bank P_L3t_Resolver }
+
+
+/*Level 4 with box */
+
+P_L3t_User -> P_L4_User [label = <>, weight = 100]
+P_L3t_Resolver -> P_L4_Resolver [label = <>, weight = 100]
+{rank = same; P_L4_User P_L4_Resolver }
+P_L4_User -> P_L4_Resolver [label = <pkB>, dir = back, arrowhead = normal]
+
+P_L4_User -> P_L4t_User [label = <>, weight = 100]
+P_L4t_User [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="red">Verify</FONT> pkB with VC</TD></TR></TABLE>>]
+P_L3t_Bank -> P_L4t_Bank [label = <>, weight = 100]
+P_L4_Resolver -> P_L4t_Resolver [label = <>, weight = 100]
+{rank = same; P_L4t_User P_L4t_Bank P_L4t_Resolver }
+
+/*Level 5 */
+
+P_L4t_User -> P_L5_User [label = <>, weight = 100]
+P_L4t_Bank -> P_L5_Bank [label = <>, weight = 100]
+{rank = same; P_L5_User P_L5_Bank }
+P_L5_User -> P_L5_Bank [label = <aenc((didReq=didU,didOri=didU,pkU),pkB)>, arrowhead = normal]
+
+P_L5_User -> P_L5t_User [label = <>, weight = 100]
+P_L5_Bank -> P_L5t_Bank [label = <>, weight = 100]
+P_L4t_Resolver -> P_L5t_Resolver [label = <>, weight = 100]
+{rank = same; P_L5t_User P_L5t_Bank P_L5t_Resolver }
+
+/*Level 6 */
+
+P_L5t_User -> P_L6_User [label = <>, weight = 100]
+P_L5t_Bank -> P_L6_Bank [label = <>, weight = 100]
+{rank = same; P_L6_User P_L6_Bank }
+P_L6_User -> P_L6_Bank [label = <aenc((didReq,didOri,<FONT COLOR="blue">new </FONT>nonce),pkU)>, dir = back, arrowhead = normal]
+
+P_L6_User -> P_L6t_User [label = <>, weight = 100]
+P_L6t_User [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="red">Verify</FONT> didReq=didU,didOri=didU</TD></TR></TABLE>>]
+P_L6_Bank -> P_L6t_Bank [label = <>, weight = 100]
+P_L5t_Resolver -> P_L6t_Resolver [label = <>, weight = 100]
+{rank = same; P_L6t_User P_L6t_Bank P_L6t_Resolver }
+
+P_L6t_User -> P_L6tt_User [label = <>, weight = 100]
+P_L6tt_User [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD>Make verifiable presentation VP</TD></TR></TABLE>>]
+P_L6t_Bank -> P_L6tt_Bank [label = <>, weight = 100]
+P_L6t_Resolver -> P_L6tt_Resolver [label = <>, weight = 100]
+{rank = same; P_L6tt_User P_L6tt_Bank P_L6tt_Resolver }
+
+/*Level 7 */
+
+P_L6tt_User -> P_L7_User [label = <>, weight = 100]
+P_L6tt_Bank -> P_L7_Bank [label = <>, weight = 100]
+{rank = same; P_L7_User P_L7_Bank }
+P_L7_User -> P_L7_Bank [label = <aenc(VP,pkB)>, arrowhead = normal]
+
+P_L7_User -> P_L7t_User [label = <>, weight = 100]
+P_L7_Bank -> P_L7t_Bank [label = <>, weight = 100]
+P_L6tt_Resolver -> P_L7t_Resolver [label = <>, weight = 100]
+{rank = same; P_L7t_User P_L7t_Bank P_L7t_Resolver }
+
+/*Level 8 */
+
+P_L7t_Bank -> P_L8_Bank [label = <>, weight = 100]
+P_L7t_Resolver -> P_L8_Resolver [label = <>, weight = 100]
+{rank = same; P_L8_Bank P_L8_Resolver }
+P_L8_Bank -> P_L8_Resolver [label = <did_vc_issuer>, arrowhead = normal]
+
+P_L7t_User -> P_L8t_User [label = <>, weight = 100]
+P_L8_Bank -> P_L8t_Bank [label = <>, weight = 100]
+P_L8_Resolver -> P_L8t_Resolver [label = <>, weight = 100]
+{rank = same; P_L8t_User P_L8t_Bank P_L8t_Resolver }
+
+/*Level 9 */
+
+P_L8t_Bank -> P_L9_Bank [label = <>, weight = 100]
+P_L8t_Resolver -> P_L9_Resolver [label = <>, weight = 100]
+{rank = same; P_L9_Bank P_L9_Resolver }
+P_L9_Bank -> P_L9_Resolver [label = <pkIssuer>, dir = back, arrowhead = normal]
+
+P_L8t_User -> P_L9t_User [label = <>, weight = 100]
+P_L9_Bank -> P_L9t_Bank [label = <>, weight = 100]
+P_L9t_Bank [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="red">Verify</FONT> VP with (pkU, pkIssuer) and issuer = didB</TD></TR></TABLE>>]
+P_L9_Resolver -> P_L9t_Resolver [label = <>, weight = 100]
+{rank = same; P_L9t_User P_L9t_Bank P_L9t_Resolver }
+
+P_L9t_User -> P_L9tt_User [label = <>, weight = 100]
+P_L9t_Bank -> P_L9tt_Bank [label = <>, weight = 100]
+P_L9tt_Bank [shape = plaintext, label = <<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"> <TR><TD><FONT COLOR="blue">new </FONT>token</TD></TR></TABLE>>]
+P_L9t_Resolver -> P_L9tt_Resolver [label = <>, weight = 100]
+{rank = same; P_L9tt_User P_L9tt_Bank P_L9tt_Resolver }
+
+/*Level 10 */
+
+P_L9tt_User -> P_L10_User [label = <>, weight = 100]
+P_L9tt_Bank -> P_L10_Bank [label = <>, weight = 100]
+{rank = same; P_L10_User P_L10_Bank }
+P_L10_User -> P_L10_Bank [label = <aenc(token,pkU)>, dir = back, arrowhead = normal]
+
+P_L10_User -> P_L10t_User [label = <>, weight = 100]
+P_L10_Bank -> P_L10t_Bank [label = <>, weight = 100]
+P_L10t_User [label = "", width = 0.3, height = 0.3]
+P_L9tt_Resolver -> P_L10t_Resolver [label = <>, weight = 100]
+{rank = same; P_L10t_User P_L10t_Bank P_L10t_Resolver }
+
+
+}
