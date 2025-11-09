@@ -60,16 +60,21 @@ P_L3t_Bank -> P_L4t_Bank [label = <>, weight = 100]
 P_L4_Resolver -> P_L4t_Resolver [label = <>, weight = 100]
 {rank = same; P_L4t_User P_L4t_Bank P_L4t_Resolver }
 
+P_L4t_User -> P_L4tt_User [label = <>, weight = 100]
+P_L4t_Bank -> P_L4tt_Bank [label = <>, weight = 100]
+P_L4t_Resolver -> P_L4tt_Resolver [label = <>, weight = 100]
+{rank = same; P_L4tt_User P_L4tt_Bank P_L4tt_Resolver }
+
 /*Level 5 */
 
-P_L4t_User -> P_L5_User [label = <>, weight = 100]
-P_L4t_Bank -> P_L5_Bank [label = <>, weight = 100]
+P_L4tt_User -> P_L5_User [label = <>, weight = 100]
+P_L4tt_Bank -> P_L5_Bank [label = <>, weight = 100]
 {rank = same; P_L5_User P_L5_Bank }
 P_L5_User -> P_L5_Bank [label = <aenc((didReq=didU,didOri=didU,pkU),pkB)>, arrowhead = normal]
 
 P_L5_User -> P_L5t_User [label = <>, weight = 100]
 P_L5_Bank -> P_L5t_Bank [label = <>, weight = 100]
-P_L4t_Resolver -> P_L5t_Resolver [label = <>, weight = 100]
+P_L4tt_Resolver -> P_L5t_Resolver [label = <>, weight = 100]
 {rank = same; P_L5t_User P_L5t_Bank P_L5t_Resolver }
 
 /*Level 6 */
