@@ -171,7 +171,7 @@ process
  Đã thử nghiệm
  - Lộ VC: bị tấn công
  - Lộ VP: bị tấn công
- - Không gửi PkU khi rquest login:  bị tấn công
+ - Không gửi PkU khi rquest login:  Không bị tấn công
  - Bị thay đổi public key của User trong registry: TPP không thể đăng nhập và access tài khoản của User
  - Bị thay đổi public key của Bank trong registry:  Cả User và TPP không thể đăng nhập và access tài khoản của User
  - Lợi ích: dù cho attacker giả mạo trang web giả, cũng ko tấn công được, vì đã có bước kiểm tra pkB trong chữ kí của VC
