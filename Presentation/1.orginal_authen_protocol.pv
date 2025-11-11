@@ -1,0 +1,128 @@
+type skey.
+type pkey.
+type signature.
+
+(* Hàm về mã hóa*)
+fun pk(skey): pkey.
+fun sign(bitstring, skey): signature.
+reduc forall m: bitstring, k: skey; verifysign(sign(m, k), pk(k)) = m.
+fun aenc(bitstring, pkey ) : bitstring.
+reduc forall m: bitstring , k : skey ; adec(aenc(m, pk(k)), k) = m.
+
+(* Hàm về credential, đang thiếu kiểm tra pk(k) chính là public key của issuer *)
+type credential.
+free null_cred : credential.
+fun make_credential(bitstring, bitstring, bitstring, credential, signature): credential.
+reduc
+  forall issuer: bitstring, subject: bitstring, data: bitstring, parentVC: credential, k: skey;
+    resolve_credential(make_credential(issuer, subject, data, parentVC, sign((issuer, subject, data, parentVC), k)), pk(k)) = (issuer, subject, data, parentVC).
+
+(* Hàm về presentation, phải kiểm tra pk(k) chính là public key của subject, và subject phải bằng subject trong vc, và issuer trong vc phải là bank *)
+type presentation.
+fun make_presentation(bitstring, bitstring, bitstring, credential, signature): presentation.
+reduc
+  forall issuer: bitstring, subject: bitstring, nonce: bitstring, vc: credential, k: skey;
+    resolve_presentation(make_presentation(issuer, subject, nonce, vc, sign((issuer, subject, nonce, vc), k)), pk(k)) = (issuer, subject, nonce, vc).
+
+fun to_string(presentation) : bitstring  [typeConverter].
+reduc forall vp: presentation, t: bitstring; to_presentation(to_string(vp)) = vp.
+
+free didU: bitstring.
+free didB: bitstring.
+free skU: skey [private].
+free skB: skey [private].
+free dataU: bitstring [private].    (* Dữ liệu trong VC (ví dụ thông tin người dùng) *)
+free tokenU: bitstring [private]. 
+
+(* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
+free c_auth: channel.
+free c_resolve: channel.  (* [private] /resolve DID *)
+
+(* Sự kiện đánh dấu các bước quan trọng để kiểm chứng *)
+event userStart(bitstring,bitstring,bitstring).    (* a1 bắt đầu xác thực, access vô tài khoản a2, với nonce *)
+event tokenIssued(bitstring,bitstring, bitstring).  (* Bank phát hành token cho a1, access vô tài khoản à, với nonce *)
+
+let DIDResolver =
+  in(c_resolve, did: bitstring);
+  if did = didU then
+    out(c_resolve, pk(skU))
+  else if did = didB then
+    out(c_resolve, pk(skB))
+  else
+    0.
+
+(* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
+let UserProcess (cred: credential) = 
+    out(c_resolve, didB);
+    in(c_resolve, pkB: pkey);
+    (* Kiểm tra public key của bank *)
+    let (=didB, _:bitstring, _:bitstring, _:credential) = resolve_credential(cred, pkB) in
+    let pkU = pk(skU) in
+    (* Gửi yêu cầu đăng nhập *)
+    out(c_auth, aenc((didU, didU, pkU), pkB));
+    (* Nhận nonce được mã hóa từ Bank *)
+    in(c_auth, ResB: bitstring);
+    (* Kiểm tra phản hồi từ Bank trên nonceU *)
+    let (=didU, =didU, nonceB: bitstring) = adec(ResB, skU) in    
+    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
+    event userStart(didU, didU, nonceB);
+    (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
+    let vp_data = (didB, didU, nonceB, cred) in
+    let sigVP = sign(vp_data, skU) in
+    let prest = make_presentation(didB, didU, nonceB, cred, sigVP) in
+    out(c_auth, aenc(to_string(prest), pkB));
+    (* Bước 4: Nhận accessToken từ Bank *)
+    in(c_auth, token_enc: bitstring).
+
+(* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
+let BankProcess =
+    in(c_auth, authenReq: bitstring);
+    let (didReq:bitstring, didOri:bitstring, pkReq: pkey) = adec(authenReq, skB) in
+    (* Bank nhận yêu cầu: didReq là DID từ requester *)
+    new nonceB: bitstring;
+    (* Gửi nonce đã mã hóa *)
+    out(c_auth, aenc((didReq, didOri, nonceB), pkReq));
+    (* Nhận VP từ User *)
+    in(c_auth, prest_Res_enc: bitstring);
+    (* Kiểm tra điều kiện an ninh trên VP *)
+    let prest_Res = to_presentation(adec(prest_Res_enc, skB)) in
+    let (issuer_did:bitstring, =didReq, =nonceB, vc_res: credential) = resolve_presentation(prest_Res, pkReq) in
+    let pkB = pk(skB) in
+    out(c_resolve, issuer_did);
+    in(c_resolve, pkIssuer: pkey);
+    let (issuer_did_vc:bitstring, =didReq, _:bitstring, parent_vc: credential) = resolve_credential(vc_res, pkIssuer) in
+    let (=didB, =pkB) = (issuer_did_vc, pkIssuer) in
+    (* Tạo accessToken mới và gửi cho User *)
+    (*new token: bitstring;*)
+    out(c_auth, aenc(tokenU, pkReq));
+    (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
+    event tokenIssued(didReq, didReq, nonceB).
+
+query didFReq:bitstring, didOri:bitstring, n: bitstring;
+  inj-event(tokenIssued(didFReq, didOri, n)) ==>
+  inj-event(userStart(didFReq, didOri, n)).
+  
+query n: bitstring; event(tokenIssued(didU, didU, n)).
+
+query attacker(skU).
+query attacker(skB).
+query attacker(tokenU).
+
+process 
+    let vc_data = (didB, didU, dataU, null_cred) in
+    let sigVC = sign(vc_data, skB) in
+    let cred = make_credential(didB, didU, dataU, null_cred, sigVC) in
+    (
+      !UserProcess(cred) | !BankProcess | !DIDResolver
+    )
+
+ (*
+ Đã thử nghiệm
+ - Lộ VC: bị tấn công
+ - Lộ VP: bị tấn công
+ - Không gửi PkU khi rquest login:  Không bị tấn công
+ - Bị thay đổi public key của User trong registry: TPP không thể đăng nhập và access tài khoản của User
+ - Bị thay đổi public key của Bank trong registry:  Cả User và TPP không thể đăng nhập và access tài khoản của User
+ - Lợi ích: dù cho attacker giả mạo trang web giả, cũng ko tấn công được, vì đã có bước kiểm tra pkB trong chữ kí của VC
+ - Nhược điểm: chưa chứng minh được khóa vòng, revoke, zkp
+ *)
