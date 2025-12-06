@@ -87,7 +87,7 @@ let TPPProcess (delegate_cred: credential) =
     out(c_resolve, didU);
     in(c_resolve, pkU: pkey);    
     (* Kiểm tra public key của bank *)
-    let (=didU,_:bitstring, _:bitstring, vc_user: credential) = resolve_credential(delegate_cred, pkU) in
+    let (_:bitstring,_:bitstring, _:bitstring, vc_user: credential) = resolve_credential(delegate_cred, pkU) in
     let (=didB, _:bitstring, _:bitstring, _: credential) = resolve_credential(vc_user, pkB) in
     let pkTPP = pk(skTPP) in
     (* Gửi yêu cầu đăng nhập *)

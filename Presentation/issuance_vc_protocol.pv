@@ -14,7 +14,7 @@ free didB: bitstring.
 free skU: skey [private].
 free skB: skey [private].
 free dataU: bitstring [private].    (* Dữ liệu trong VC (ví dụ thông tin người dùng) *)
-free tokenU: bitstring [private]. 
+free VC_User: bitstring [private]. 
 
 (* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
 free c_auth: channel.
@@ -72,11 +72,11 @@ let BankProcess =
     (*new token: bitstring;*)
     let (=didU) = (didReq) in
     let (=pkU) = pkReq in
-    out(c_auth, aenc(tokenU, pkReq));
+    out(c_auth, aenc(VC_User, pkReq));
     (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
     event tokenIssued(didReq, nonceB).
 
-query attacker(tokenU).
+query attacker(VC_User).
 
 query didFReq:bitstring, n: bitstring;
   inj-event(tokenIssued(didFReq, n)) ==>
