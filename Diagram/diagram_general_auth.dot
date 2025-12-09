@@ -82,7 +82,7 @@ P_L4didUt_Resolver -> P_L4didUtt_Resolver [label = <>, weight = 100]
 P_L4t_TPP -> P_L5_TPP [label = <>, weight = 100]
 P_L4t_Bank -> P_L5_Bank [label = <>, weight = 100]
 {rank = same; P_L5_TPP P_L5_Bank }
-P_L5_TPP -> P_L5_Bank [label = <aenc((didH=didU/didTPP,didU,pkH),pkB)>, arrowhead = normal]
+P_L5_TPP -> P_L5_Bank [label = <aenc((didH=didU/didTPP,didU),pkB)>, arrowhead = normal]
 
 P_L5_TPP -> P_L5t_TPP [label = <>, weight = 100]
 P_L5_Bank -> P_L5t_Bank [label = <>, weight = 100]

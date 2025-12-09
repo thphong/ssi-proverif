@@ -13,16 +13,17 @@ free didU: bitstring.
 free didB: bitstring.
 free skU: skey [private].
 free skB: skey [private].
-free dataU: bitstring [private].    (* Dữ liệu trong VC (ví dụ thông tin người dùng) *)
 free VC_User: bitstring [private]. 
 
 (* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
-free c_auth: channel.
-free c_resolve: channel.  (* [private] /resolve DID *)
+free c_vcrequest: channel.
+free c_resolve: channel.  (*resolve DID *)
 
 (* Sự kiện đánh dấu các bước quan trọng để kiểm chứng *)
-event userStart(bitstring,bitstring).    (* a1 bắt đầu xác thực, access vô tài khoản a2, với nonce *)
-event tokenIssued(bitstring, bitstring).  (* Bank phát hành token cho a1, access vô tài khoản à, với nonce *)
+(*did, nonce*)
+event userStart(bitstring,bitstring).
+(*did, nonce*)
+event VCIssued(bitstring, bitstring).
 
 let DIDResolver =
   in(c_resolve, did: bitstring);
@@ -33,76 +34,55 @@ let DIDResolver =
   else
     0.
 
-(* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
+(* Tiến trình của User *)
 let UserProcess = 
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
-    (* Kiểm tra public key của bank *)
     let pkU = pk(skU) in
     (* Gửi yêu cầu đăng nhập *)
-    out(c_auth, aenc(didU, pkB));
+    out(c_vcrequest, aenc(didU, pkB));
     (* Nhận nonce được mã hóa từ Bank *)
-    in(c_auth, ResB: bitstring);
-    (* Kiểm tra phản hồi từ Bank trên nonceU *)
+    in(c_vcrequest, ResB: bitstring);
+    (* Kiểm tra phản hồi từ Bank *)
     let (=didU, nonceB: bitstring) = adec(ResB, skU) in    
-    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
+    (* Đánh dấu sự kiện User bắt đầu quá trình cấp VC *)
     event userStart(didU, nonceB);
-    (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
     let sign_data = (didU, nonceB) in
-    out(c_auth, aenc((didU, nonceB, sign(sign_data, skU)) , pkB));
-    (* Bước 4: Nhận accessToken từ Bank *)
-    in(c_auth, token_enc: bitstring).
+    (* Gửi chữ ký để xác thực *)
+    out(c_vcrequest, aenc((didU, nonceB, sign(sign_data, skU)) , pkB));
+    (* Nhận VC từ Bank *)
+    in(c_vcrequest, token_enc: bitstring).
 
-(* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
+(* Tiến trình của Bank *)
 let BankProcess =
-    in(c_auth, authenReq: bitstring);
+    in(c_vcrequest, authenReq: bitstring);
     let (didReq:bitstring) = adec(authenReq, skB) in 
     out(c_resolve, didReq);
     in(c_resolve, pkReq: pkey);
     let (=didU) = (didReq) in
     let pkU = pk(skU) in
-    let (=pkU) = pkReq in
+    (*let (=pkU) = pkReq in*)
     (* Bank nhận yêu cầu: didReq là DID từ requester *)
     new nonceB: bitstring;
     (* Gửi nonce đã mã hóa *)
-    out(c_auth, aenc((didReq, nonceB), pkReq));
-    (* Nhận VP từ User *)
-    in(c_auth, prest_Res_enc: bitstring);
+    out(c_vcrequest, aenc((didReq, nonceB), pkReq));
+    (* Nhận bằng chứng xác thực từ User *)
+    in(c_vcrequest, proof_res_enc: bitstring);
     (* Kiểm tra điều kiện an ninh trên VP *)
-    let prest_Res = adec(prest_Res_enc, skB) in
-    let (=didReq, =nonceB, signReq: signature) = prest_Res in
+    let proof_res = adec(proof_res_enc, skB) in
+    let (=didReq, =nonceB, signReq: signature) = proof_res in
     let (=didReq, =nonceB) = verifysign(signReq, pkReq) in 
-    (* Tạo accessToken mới và gửi cho User *)
-    (*new token: bitstring;*)    
-    out(c_auth, aenc(VC_User, pkReq));
-    (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-    event tokenIssued(didReq, nonceB).
+    (* Tạo VC và gửi cho User *)
+    out(c_vcrequest, aenc(VC_User, pkReq));
+    (* Đánh dấu sự kiện Bank phát hành VC cho DID tương ứng *)
+    event VCIssued(didReq, nonceB).
 
 query attacker(VC_User).
 
-query didFReq:bitstring, n: bitstring;
-  inj-event(tokenIssued(didFReq, n)) ==>
-  inj-event(userStart(didFReq, n)).
+(*query didFReq:bitstring, nonce:bitstring;
+  inj-event(VCIssued(didFReq, nonce)) ==>
+  inj-event(userStart(didFReq, nonce)).
 
-query n: bitstring; event(tokenIssued(didU, n)).
-
-(*query n: bitstring; event(tokenIssued(didU, n)).
-
-query n: bitstring; event(tokenIssued(didU, didU, n)).
-
-query attacker(skU).
-query attacker(skB).
-*)
+query nonce: bitstring; event(VCIssued(didU, nonce)).*)
 
 process  !UserProcess | !BankProcess | !DIDResolver
-
- (*
- Đã thử nghiệm
- - Lộ VC: bị tấn công
- - Lộ VP: bị tấn công
- - Không gửi PkU khi rquest login:  Không bị tấn công
- - Bị thay đổi public key của User trong registry: TPP không thể đăng nhập và access tài khoản của User
- - Bị thay đổi public key của Bank trong registry:  Cả User và TPP không thể đăng nhập và access tài khoản của User
- - Lợi ích: dù cho attacker giả mạo trang web giả, cũng ko tấn công được, vì đã có bước kiểm tra pkB trong chữ kí của VC
- - Nhược điểm: chưa chứng minh được khóa vòng, revoke, zkp
- *)

@@ -10,23 +10,32 @@ reduc forall m: bitstring, k: skey; verifysign(sign(m, k), pk(k)) = m.
 fun aenc(bitstring, pkey ) : bitstring.
 reduc forall m: bitstring , k : skey ; adec(aenc(m, pk(k)), k) = m.
 
-(* Hàm về credential, đang thiếu kiểm tra pk(k) chính là public key của issuer *)
+(* Hàm về credential*)
 type credential.
 free null_cred : credential.
-fun make_credential(bitstring, bitstring, claim, credential, signature): credential.
+fun make_credential(bitstring, bitstring, claim, credential, signature)
+                                                          : credential.
 reduc
-  forall issuer: bitstring, subject: bitstring, claims: claim, parentVC: credential, k: skey;
-    resolve_credential(make_credential(issuer, subject, claims, parentVC, sign((issuer, subject, claims, parentVC), k)), pk(k)) = (issuer, subject, claims, parentVC).
+  forall issuer: bitstring, subject: bitstring, claims: claim, 
+                                        parentVC: credential, k: skey;
+    resolve_credential(make_credential(issuer, subject, claims, parentVC, 
+            sign((issuer, subject, claims, parentVC), k)), pk(k)) 
+                    = (issuer, subject, claims, parentVC).
 
-(* Hàm về presentation, phải kiểm tra pk(k) chính là public key của subject, và subject phải bằng subject trong vc, và issuer trong vc phải là bank *)
+(* Hàm về presentation*)
 type presentation.
-fun make_presentation(bitstring, bitstring, bitstring, credential, signature): presentation.
+fun make_presentation(bitstring, bitstring, bitstring, credential, signature)
+                                                              : presentation.
 reduc
-  forall issuer: bitstring, subject: bitstring, nonce: bitstring, vc: credential, k: skey;
-    resolve_presentation(make_presentation(issuer, subject, nonce, vc, sign((issuer, subject, nonce, vc), k)), pk(k)) = (issuer, subject, nonce, vc).
+  forall issuer: bitstring, subject: bitstring, nonce: bitstring, 
+                                                  vc: credential, k: skey;
+    resolve_presentation(make_presentation(issuer, subject, nonce, vc, 
+                              sign((issuer, subject, nonce, vc), k)), pk(k)) 
+                                      = (issuer, subject, nonce, vc).
 
 fun to_string(presentation) : bitstring  [typeConverter].
-reduc forall vp: presentation, t: bitstring; to_presentation(to_string(vp)) = vp.
+reduc forall vp: presentation, t: bitstring; 
+                          to_presentation(to_string(vp)) = vp.
 
 free didU: bitstring.
 free didB: bitstring.
@@ -38,7 +47,7 @@ free tokenU_READ: bitstring [private].
 free tokenU_TRANSFER: bitstring [private]. 
 free tokenU_READ_TRANSFER: bitstring [private]. 
 
-(* Kênh truyền thông công khai mà attacker có thể nghe/chặn (Dolev-Yao) *)
+(* Kênh truyền thông công khai mà attacker có thể nghe/chặn *)
 free c_auth: channel.
 free c_resolve: channel.  (* [private] /resolve DID *)
 
@@ -50,7 +59,7 @@ free READ_TRANSFER_PERMISSION: claim.
 (* didReq, didOri, nonce *)
 event userStart(bitstring,bitstring,bitstring).
 (* didReq, didOri, nonce, token *)
-event tokenIssued(bitstring,bitstring, bitstring, bitstring).  
+event tokenIssued(bitstring,bitstring, bitstring).  
 (* didReq, token *)
 event tokenReceived(bitstring, bitstring). 
 
@@ -65,7 +74,7 @@ let DIDResolver =
   else
     0.
 
-(* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
+(* Tiến trình của User*)
 let UserProcess (cred: credential) = 
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
@@ -75,49 +84,52 @@ let UserProcess (cred: credential) =
     out(c_auth, aenc((didU, didU), pkB));
     (* Nhận nonce được mã hóa từ Bank *)
     in(c_auth, ResB: bitstring);
-    (* Kiểm tra phản hồi từ Bank trên nonceU *)
+    (* Kiểm tra phản hồi từ Bank*)
     let (=didU, =didU, nonceB: bitstring) = adec(ResB, skU) in    
-    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
+    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực *)
     event userStart(didU, didU, nonceB);
-    (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
+    (* Tạo VP gồm (didB, didU, nonce, didU, VC) *)
     let vp_data = (didB, didU, nonceB, cred) in
     let sigVP = sign(vp_data, skU) in
     let prest = make_presentation(didB, didU, nonceB, cred, sigVP) in
     out(c_auth, aenc(to_string(prest), pkB));
-    (* Bước 4: Nhận accessToken từ Bank *)
+    (* Nhận accessToken từ Bank *)
     in(c_auth, token_enc: bitstring);
     let (token: bitstring) = adec(token_enc, skU) in
+    (* Đánh dấu đã nhận accessToken*)
     event tokenReceived(didU, token).
 
-(* Tiến trình của User: khởi xướng và thực hiện đăng nhập *)
+(* Tiến trình của TPP*)
 let TPPProcess (delegate_cred: credential) = 
     out(c_resolve, didB);
     in(c_resolve, pkB: pkey);
     out(c_resolve, didU);
     in(c_resolve, pkU: pkey);    
     (* Kiểm tra public key của bank *)
-    let (_:bitstring,_:bitstring, _:claim, vc_user: credential) = resolve_credential(delegate_cred, pkU) in
-    let (=didB, _:bitstring, _:claim, _: credential) = resolve_credential(vc_user, pkB) in
+    let (_:bitstring,_:bitstring, _:claim, vc_user: credential) 
+                  = resolve_credential(delegate_cred, pkU) in
+    let (=didB, _:bitstring, _:claim, _: credential) 
+                  = resolve_credential(vc_user, pkB) in
     (* Gửi yêu cầu đăng nhập *)
     out(c_auth, aenc((didTPP, didU), pkB));
     (* Nhận nonce được mã hóa từ Bank *)
     in(c_auth, ResB: bitstring);
     (* Kiểm tra phản hồi từ Bank *)
     let (=didTPP, =didU, nonceB: bitstring) = adec(ResB, skTPP) in    
-    (* Đánh dấu sự kiện User bắt đầu quá trình xác thực cho didU *)
+    (* Đánh dấu sự kiện UTPP bắt đầu quá trình xác thực *)
     event userStart(didTPP, didU, nonceB);
-    (* Bước 3: Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
+    (* Tạo VP gồm (nonce, didU, VC, chữ ký của User) *)
     let vp_data = (didU, didTPP, nonceB, delegate_cred) in
     let sigVP = sign(vp_data, skTPP) in
     let prest = make_presentation(didU, didTPP, nonceB, delegate_cred, sigVP) in
     out(c_auth, aenc(to_string(prest), pkB));
-    (* Bước 4: Nhận accessToken từ Bank *)
+    (* Nhận accessToken từ Bank *)
     in(c_auth, token_enc: bitstring);    
     let (token: bitstring) = adec(token_enc, skTPP) in
+    (* Đánh dấu đã nhận accessToken*)
     event tokenReceived(didTPP, token).
 
-
-(* Tiến trình của Bank: chờ yêu cầu và đáp ứng *)
+(* Tiến trình của Bank *)
 let BankProcess =
     in(c_auth, authenReq: bitstring);
     let (didReq:bitstring, didOri:bitstring) = adec(authenReq, skB) in
@@ -127,64 +139,58 @@ let BankProcess =
     new nonceB: bitstring;
     (* Gửi nonce đã mã hóa *)
     out(c_auth, aenc((didReq, didOri, nonceB), pkReq));
-    (* Nhận VP từ User *)
+    (* Nhận VP từ holder *)
     in(c_auth, prest_Res_enc: bitstring);
     (* Kiểm tra điều kiện an ninh trên VP *)
     let prest_Res = to_presentation(adec(prest_Res_enc, skB)) in
-    let (issuer_did:bitstring, =didReq, =nonceB, vc_res: credential) = resolve_presentation(prest_Res, pkReq) in
+    let (issuer_did:bitstring, =didReq, =nonceB, vc_res: credential) 
+                        = resolve_presentation(prest_Res, pkReq) in
     let pkB = pk(skB) in
     out(c_resolve, issuer_did);
     in(c_resolve, pkIssuer: pkey);
-    let (issuer_did_vc:bitstring, =didReq, claims:claim, parent_vc: credential) = resolve_credential(vc_res, pkIssuer) in
+    let (issuer_did_vc:bitstring, =didReq, claims:claim, parent_vc: credential) 
+                                      = resolve_credential(vc_res, pkIssuer) in
     if didReq = didOri then (
       let (=didB, =pkB) = (issuer_did_vc, pkIssuer) in
-      (* Tạo accessToken mới và gửi cho User *)
-      (*new token: bitstring;*)
+      (* Tạo accessToken mới và gửi cho holder *)
       if claims = READ_PERMISSION then (
         out(c_auth, aenc(tokenU_READ, pkReq));
         (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didReq, nonceB, tokenU_READ)
+        event tokenIssued(didReq, didReq, nonceB)
       )
       else if claims = TRANSFER_PERMISSION then (
         out(c_auth, aenc(tokenU_TRANSFER, pkReq));
-        (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didReq, nonceB, tokenU_TRANSFER)
+        event tokenIssued(didReq, didReq, nonceB)
       )
       else if claims = READ_TRANSFER_PERMISSION then (
         out(c_auth, aenc(tokenU_READ_TRANSFER, pkReq));
-        (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didReq, nonceB, tokenU_READ_TRANSFER)
+        event tokenIssued(didReq, didReq, nonceB)
       )
     )
     else (
       let(=didOri, =didOri) = (issuer_did, issuer_did_vc) in
-      let (=didB, =didOri, _:bitstring, _: credential) = resolve_credential(parent_vc, pkB) in
-      (*new token: bitstring;*)        
+      let (=didB, =didOri, _:bitstring, _: credential) 
+                = resolve_credential(parent_vc, pkB) in      
+      (* Tạo accessToken mới và gửi cho holder *)    
       if claims = READ_PERMISSION then (
         out(c_auth, aenc(tokenU_READ, pkReq));
         (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didOri, nonceB, tokenU_READ)
+        event tokenIssued(didReq, didOri, nonceB)
       )
       else if claims = TRANSFER_PERMISSION then (
         out(c_auth, aenc(tokenU_TRANSFER, pkReq));
-        (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didOri, nonceB, tokenU_TRANSFER)
+        event tokenIssued(didReq, didOri, nonceB)
       )
       else if claims = READ_TRANSFER_PERMISSION then (
         out(c_auth, aenc(tokenU_READ_TRANSFER, pkReq));
-        (* Đánh dấu sự kiện Bank phát hành token cho DID tương ứng *)
-        event tokenIssued(didReq, didOri, nonceB, tokenU_READ_TRANSFER)
+        event tokenIssued(didReq, didOri, nonceB)
       )
     ).
 
-query didFReq:bitstring, didOri:bitstring, n: bitstring, token: bitstring;
-  inj-event(tokenIssued(didFReq, didOri, n, token)) ==>
-  inj-event(userStart(didFReq, didOri, n)).
-  
-query n: bitstring, token: bitstring; event(tokenIssued(didU, didU, n, token)).
-query n: bitstring, token: bitstring; event(tokenIssued(didTPP, didU, n, token)).
-query n: bitstring, token: bitstring; event(tokenIssued(didU, didTPP, n, token)).
-query n: bitstring, token: bitstring; event(tokenIssued(didTPP, didTPP, n, token)).
+
+query didFReq:bitstring, nonce: bitstring;
+  inj-event(tokenIssued(didFReq, didU, nonce)) ==>
+  inj-event(userStart(didFReq, didU, nonce)).
 
 query attacker(skU).
 query attacker(skB).
@@ -193,6 +199,10 @@ query attacker(tokenU_READ).
 query attacker(tokenU_TRANSFER).
 query attacker(tokenU_READ_TRANSFER).
 
+query nonce: bitstring; event(tokenIssued(didU, didU, nonce)).
+query nonce: bitstring; event(tokenIssued(didTPP, didU, nonce)).
+query nonce: bitstring; event(tokenIssued(didU, didTPP, nonce)).
+query nonce: bitstring; event(tokenIssued(didTPP, didTPP, nonce)).
 
 query event(tokenReceived(didU, tokenU_READ)).
 query event(tokenReceived(didU, tokenU_TRANSFER)).
@@ -211,14 +221,3 @@ process
     (
       !UserProcess(cred) | !TPPProcess(delegate_cred) | !BankProcess | !DIDResolver
     )
-
- (* 
- Đã thử nghiệm
- - Lộ VC: bị tấn công
- - Lộ VP: bị tấn công
- - Không gửi PkU khi rquest login:  Không bị tấn công
- - Bị thay đổi public key của User trong registry: TPP không thể đăng nhập và access tài khoản của User
- - Bị thay đổi public key của Bank trong registry:  Cả User và TPP không thể đăng nhập và access tài khoản của User
- - Lợi ích: dù cho attacker giả mạo trang web giả, cũng ko tấn công được, vì đã có bước kiểm tra pkB trong chữ kí của VC
- - Nhược điểm: chưa chứng minh được khóa vòng, revoke, zkp
- *)
