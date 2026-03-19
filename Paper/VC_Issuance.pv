@@ -1,0 +1,90 @@
+type skey.
+type pkey.
+type signature.
+
+(* Cryptographic functions *)
+fun pk(skey): pkey.
+fun sign(bitstring, skey): signature.
+reduc forall m: bitstring, k: skey; verifysign(sign(m, k), pk(k)) = m.
+fun aenc(bitstring, pkey ) : bitstring.
+reduc forall m: bitstring , k : skey ; adec(aenc(m, pk(k)), k) = m.
+
+free didU: bitstring.
+free didB: bitstring.
+free skU: skey [private].
+free skB: skey [private].
+free VC_User: bitstring [private]. 
+
+(* Public communication channel that can be observed and intercepted
+by the attacker (Dolev–Yao model) *)
+free c_vcrequest: channel.
+free c_resolve: channel.  (*resolve DID *)
+
+(* Events marking key protocol steps for verification *)
+(*did, nonce*)
+event userStart(bitstring,bitstring).
+(*did, nonce*)
+event VCIssued(bitstring, bitstring).
+
+let DIDResolver =
+  in(c_resolve, did: bitstring);
+  if did = didU then
+    out(c_resolve, pk(skU))
+  else if did = didB then
+    out(c_resolve, pk(skB))
+  else
+    0.
+
+(* User process *)
+let UserProcess = 
+    out(c_resolve, didB);
+    in(c_resolve, pkB: pkey);
+    let pkU = pk(skU) in
+    (* Send VC request *)
+    out(c_vcrequest, aenc(didU, pkB));
+    (* Receive encrypted nonce from the Bank *)
+    in(c_vcrequest, ResB: bitstring);
+    (* Verify the response from the Bank *)
+    let (=didU, nonceB: bitstring) = adec(ResB, skU) in    
+    (* Mark the event when the User starts the VC issuance process *)
+    event userStart(didU, nonceB);
+    let sign_data = (didU, nonceB) in
+    (* Send signature for authentication *)
+    out(c_vcrequest, aenc((didU, nonceB, sign(sign_data, skU)) , pkB));
+    (* Receive the VC from the Bank *)
+    in(c_vcrequest, token_enc: bitstring).
+
+(* Bank process *)
+let BankProcess =
+    in(c_vcrequest, authenReq: bitstring);
+    let (didReq:bitstring) = adec(authenReq, skB) in 
+    out(c_resolve, didReq);
+    in(c_resolve, pkReq: pkey);
+    let (=didU) = (didReq) in
+    let pkU = pk(skU) in
+    let (=pkU) = pkReq in
+    (* Bank receives a request: didReq is the DID from the requester *)
+    new nonceB: bitstring;
+    (* Send encrypted nonce *)
+    out(c_vcrequest, aenc((didReq, nonceB), pkReq));
+    (* Receive authentication proof from the User *)
+    in(c_vcrequest, proof_res_enc: bitstring);
+    (* Verify security conditions on the VP *)
+    let proof_res = adec(proof_res_enc, skB) in
+    let (=didReq, =nonceB, signReq: signature) = proof_res in
+    let (=didReq, =nonceB) = verifysign(signReq, pkReq) in 
+    (* Create a VC and send it to the User *)
+    out(c_vcrequest, aenc(VC_User, pkReq));
+    (* Mark the event when the Bank issues a VC for the 
+                                    corresponding DID *)
+    event VCIssued(didReq, nonceB).
+
+query attacker(VC_User).
+
+query didFReq:bitstring, nonce:bitstring;
+  inj-event(VCIssued(didFReq, nonce)) ==>
+  inj-event(userStart(didFReq, nonce)).
+
+query nonce: bitstring; event(VCIssued(didU, nonce)).
+
+process  !UserProcess | !BankProcess | !DIDResolver
